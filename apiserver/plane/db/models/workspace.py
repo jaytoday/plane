@@ -1,6 +1,7 @@
 # Django imports
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 # Module imports
 from . import BaseModel
@@ -14,16 +15,82 @@ ROLE_CHOICES = (
 )
 
 
+def get_default_props():
+    return {
+        "filters": {
+            "priority": None,
+            "state": None,
+            "state_group": None,
+            "assignees": None,
+            "created_by": None,
+            "labels": None,
+            "start_date": None,
+            "target_date": None,
+            "subscriber": None,
+        },
+        "display_filters": {
+            "group_by": None,
+            "order_by": "-created_at",
+            "type": None,
+            "sub_issue": True,
+            "show_empty_groups": True,
+            "layout": "list",
+            "calendar_date_range": "",
+        },
+        "display_properties": {
+            "assignee": True,
+            "attachment_count": True,
+            "created_on": True,
+            "due_date": True,
+            "estimate": True,
+            "key": True,
+            "labels": True,
+            "link": True,
+            "priority": True,
+            "start_date": True,
+            "state": True,
+            "sub_issue_count": True,
+            "updated_on": True,
+        },
+    }
+
+
+def get_issue_props():
+    return {
+        "subscribed": True,
+        "assigned": True,
+        "created": True,
+        "all_issues": True,
+    }
+
+
+def slug_validator(value):
+    if value in [
+        "404",
+        "accounts",
+        "api",
+        "create-workspace",
+        "god-mode",
+        "installations",
+        "invitations",
+        "onboarding",
+        "profile",
+        "spaces",
+        "workspace-invitations",
+    ]:
+        raise ValidationError("Slug is not valid")
+
+
 class Workspace(BaseModel):
-    name = models.CharField(max_length=255, verbose_name="Workspace Name")
+    name = models.CharField(max_length=80, verbose_name="Workspace Name")
     logo = models.URLField(verbose_name="Logo", blank=True, null=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="owner_workspace",
     )
-    slug = models.SlugField(max_length=100, db_index=True, unique=True)
-    company_size = models.PositiveIntegerField(default=10)
+    slug = models.SlugField(max_length=48, db_index=True, unique=True, validators=[slug_validator,])
+    organization_size = models.CharField(max_length=20, blank=True, null=True)
 
     def __str__(self):
         """Return name of the Workspace"""
@@ -47,7 +114,10 @@ class WorkspaceMember(BaseModel):
     )
     role = models.PositiveSmallIntegerField(choices=ROLE_CHOICES, default=10)
     company_role = models.TextField(null=True, blank=True)
-    view_props = models.JSONField(null=True, blank=True)
+    view_props = models.JSONField(default=get_default_props)
+    default_props = models.JSONField(default=get_default_props)
+    issue_props = models.JSONField(default=get_issue_props)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         unique_together = ["workspace", "member"]

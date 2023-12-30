@@ -1,6 +1,8 @@
 # Python imports
-from enum import unique
 import uuid
+import string
+import random
+import pytz
 
 # Django imports
 from django.db import models
@@ -8,15 +10,21 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import AbstractBaseUser, UserManager, PermissionsMixin
 from django.utils import timezone
-from django.core.mail import EmailMultiAlternatives
-from django.template.loader import render_to_string
-from django.utils.html import strip_tags
 from django.conf import settings
 
 # Third party imports
 from sentry_sdk import capture_exception
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
+
+
+def get_default_onboarding():
+    return {
+        "profile_complete": False,
+        "workspace_create": False,
+        "workspace_invite": False,
+        "workspace_join": False,
+    }
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -31,6 +39,7 @@ class User(AbstractBaseUser, PermissionsMixin):
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
     avatar = models.CharField(max_length=255, blank=True)
+    cover_image = models.URLField(blank=True, null=True, max_length=800)
 
     # tracking metrics
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
@@ -55,7 +64,8 @@ class User(AbstractBaseUser, PermissionsMixin):
     billing_address = models.JSONField(null=True)
     has_billing_address = models.BooleanField(default=False)
 
-    user_timezone = models.CharField(max_length=255, default="Asia/Kolkata")
+    USER_TIMEZONE_CHOICES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
+    user_timezone = models.CharField(max_length=255, default="UTC", choices=USER_TIMEZONE_CHOICES)
 
     last_active = models.DateTimeField(default=timezone.now, null=True)
     last_login_time = models.DateTimeField(null=True)
@@ -73,6 +83,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     role = models.CharField(max_length=300, null=True, blank=True)
     is_bot = models.BooleanField(default=False)
     theme = models.JSONField(default=dict)
+    display_name = models.CharField(max_length=255, default="")
+    is_tour_completed = models.BooleanField(default=False)
+    onboarding_step = models.JSONField(default=get_default_onboarding)
+    use_case = models.TextField(blank=True, null=True)
 
     USERNAME_FIELD = "email"
 
@@ -96,6 +110,13 @@ class User(AbstractBaseUser, PermissionsMixin):
         if self.token_updated_at is not None:
             self.token = uuid.uuid4().hex + uuid.uuid4().hex
             self.token_updated_at = timezone.now()
+
+        if not self.display_name:
+            self.display_name = (
+                self.email.split("@")[0]
+                if len(self.email.split("@"))
+                else "".join(random.choice(string.ascii_letters) for _ in range(6))
+            )
 
         if self.is_superuser:
             self.is_staff = True

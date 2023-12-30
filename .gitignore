@@ -16,6 +16,8 @@ node_modules
 
 # Production
 /build
+dist/
+out/
 
 # Misc
 .DS_Store
@@ -43,6 +45,7 @@ yarn-error.log*
 
 ## Django ##
 venv
+.venv
 *.pyc
 staticfiles
 mediafiles
@@ -70,3 +73,10 @@ package-lock.json
 package-lock.json
 pnpm-lock.yaml
 pnpm-workspace.yaml
+
+.npmrc
+.secrets
+tmp/
+## packages
+dist
+.temp/
